@@ -12,21 +12,47 @@ enum Role {
   USER
 }
 
+enum UnitSystem {
+  imperial
+  metric
+}
+
+enum RiderType {
+  Gravel
+  Road
+  MTB
+  CX
+  TT
+  Multi
+}
+
 model User {
-  id            String          @id @default(cuid())
-  name          String?
-  email         String?         @unique
-  emailVerified DateTime?
-  image         String?
-  role          Role            @default(USER)
-  accounts      Account[]
-  sessions      Session[]
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  WhoopCycle    WhoopCycle[]
-  WhoopRecovery WhoopRecovery[]
-  WhoopSleep    WhoopSleep[]
-  WhoopWorkout  WhoopWorkout[]
+  id             String          @id @default(cuid())
+  name           String?
+  email          String?         @unique
+  emailVerified  DateTime?
+  image          String?
+  role           Role            @default(USER)
+
+  // ----- Auth (optional credentials flow) -----
+  passwordHash   String?         @db.Text
+
+  // ----- VeloTerra rider profile -----
+  unitSystem     UnitSystem      @default(imperial)
+  ftp            Int?
+  riderType      RiderType?
+  weightLbs      Float?
+
+  // ----- Relations -----
+  accounts       Account[]
+  sessions       Session[]
+  WhoopCycle     WhoopCycle[]
+  WhoopRecovery  WhoopRecovery[]
+  WhoopSleep     WhoopSleep[]
+  WhoopWorkout   WhoopWorkout[]
+
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 }
 
 model Account {
@@ -35,6 +61,8 @@ model Account {
   type              String
   provider          String
   providerAccountId String
+
+  // Token fields (OAuth providers like Strava/Google)
   access_token      String? @db.Text
   refresh_token     String? @db.Text
   expires_at        Int?
@@ -46,6 +74,7 @@ model Account {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  @@index([userId])
 }
 
 model Session {
@@ -54,6 +83,8 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model VerificationToken {
@@ -71,9 +102,14 @@ model WhoopCycle {
   startedAt DateTime
   endedAt   DateTime?
   payload   Json
+
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+
+  @@index([userId, startedAt])
+  @@index([userId])
 }
 
 model WhoopRecovery {
@@ -83,9 +119,14 @@ model WhoopRecovery {
   recordedAt DateTime
   score      Float?
   payload    Json
+
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  @@index([userId, recordedAt])
+  @@index([userId])
 }
 
 model WhoopSleep {
@@ -95,9 +136,14 @@ model WhoopSleep {
   startedAt DateTime
   endedAt   DateTime?
   payload   Json
+
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+
+  @@index([userId, startedAt])
+  @@index([userId])
 }
 
 model WhoopWorkout {
@@ -109,7 +155,12 @@ model WhoopWorkout {
   sport     String?
   strain    Float?
   payload   Json
+
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+
+  @@index([userId, startedAt])
+  @@index([userId])
 }
