@@ -2,6 +2,7 @@
 
 import { useSession } from 'next-auth/react';
 import { useState, useEffect } from 'react';
+import CoachCard from '@/components/CoachCard';
 
 export default function Dashboard() {
   const { data: session, status } = useSession();
@@ -51,7 +52,7 @@ export default function Dashboard() {
   return (
     <div className="p-8 space-y-6">
       <h1 className="text-2xl font-bold">WHOOP Dashboard</h1>
-
+        <CoachCard />
       <button
         onClick={fetchWhoopData}
         className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-60"
