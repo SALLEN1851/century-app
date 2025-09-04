@@ -1,5 +1,47 @@
 import { NextResponse, NextRequest } from "next/server";
 import { openai } from "@/lib/ai";
+import { z } from 'zod'
+
+const GoalSchema = z.object({
+  goalText: z.string().min(1).max(500).optional(),
+  eventDate: z.string().date().optional().or(z.literal('').transform(() => undefined)),
+  weeklyFocus: z.enum(['endurance','climbing','speed','balanced']).optional(),
+  longRideDay: z.enum(['Sat','Sun','Either']).optional(),
+}).partial()
+
+export async function POST(req: Request) {
+  const body = await req.json().catch(() => ({}))
+  const parse = GoalSchema.safeParse(body?.goal || body) // allow {goal:{...}} or {...}
+  const goal = parse.success ? parse.data : {}
+
+  // TODO: pull recent WHOOP signals server-side if you prefer
+  // const whoop = await fetchWhoopSignals()
+
+  // Call your LLM or planning logic with the goal
+  const plan = await buildDailyPlan({ goal /*, whoop*/ })
+
+  return NextResponse.json({ plan })
+}
+
+// fallback/simple stub
+async function buildDailyPlan({ goal }: { goal: any }) {
+  // Replace with your AI call; here's a stubbed structure
+  return {
+    flags: [],
+    workout: {
+      label: goal?.weeklyFocus === 'climbing' ? 'Endurance w/ hills' : 'Endurance Z2',
+      duration_min: 90,
+      zones: 'Z2 with brief Z3',
+      intervals: '—',
+      notes: goal?.goalText || 'Steady aerobic ride. Keep cadence smooth.',
+    },
+    fueling: {
+      carbs_g: 90, fluids_L: 1.0, sodium_mg: 800,
+      per_hour: { carbs_g: 60, fluids_L: 0.7, sodium_mg: 600 },
+    },
+    rationale: 'Adjusted for your stated goal & current phase.',
+  }
+}
 
 type WhoopEnvelope<T = any> = { records?: T[] };
 
