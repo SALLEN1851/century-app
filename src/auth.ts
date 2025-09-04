@@ -1,60 +1,55 @@
+// src/auth.ts
 import NextAuth from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import Credentials from "next-auth/providers/credentials";
 
-const prisma = new PrismaClient();
+// IMPORTANT: no top-level bcrypt import; do it dynamically in authorize()
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  // Node-only pieces are fine here:
   adapter: PrismaAdapter(prisma),
+  // You can use "database" or "jwt" here. If you want DB sessions, keep:
+  // session: { strategy: "database" },
+  // To simplify, "jwt" works great and avoids DB lookups for sessions:
+  session: { strategy: "jwt" },
+
   providers: [
-    {
-      id: "whoop",
-      name: "WHOOP",
-      type: "oauth",
-      clientId: process.env.WHOOP_CLIENT_ID || "7f9247a0-74b4-4017-8a91-a6e264904c79",
-      clientSecret: process.env.WHOOP_CLIENT_SECRET || "57cd9fdd7dc99efb58ce292799985a69e6e9c81dc678634b963bfd659fe17d6b",
-      client: {
-        token_endpoint_auth_method: "client_secret_post",
+    Credentials({
+      name: "Credentials",
+      credentials: { email: {}, password: {} },
+      async authorize(creds) {
+        const email = (creds?.email || "").toLowerCase().trim();
+        const user = await prisma.user.findUnique({ where: { email } });
+        if (!user?.passwordHash) return null;
+
+        // dynamic import keeps Edge bundle clean
+        const { compare } = await import("bcrypt");
+        const ok = await compare(String(creds?.password), user.passwordHash);
+        return ok ? user : null;
       },
-      checks: ["state"], // Force use of state instead of PKCE
-      authorization: {
-        url: "https://api.prod.whoop.com/oauth/oauth2/auth",
-        params: {
-          scope: "offline read:profile read:cycles read:recovery read:sleep read:workout",
-        },
-      },
-      token: {
-        url: "https://api.prod.whoop.com/oauth/oauth2/token",
-      },
-      userinfo: {
-        url: "https://api.prod.whoop.com/developer/v2/user/profile/basic",
-      },
-      profile(profile: any) {
-        return {
-          id: profile.user_id.toString(),
-          name: `${profile.first_name} ${profile.last_name}`,
-          email: profile.email,
-          image: null,
-        };
-      },
-    },
+    }),
+    // Enable when ready:
+    // Google({ clientId: process.env.GOOGLE_ID!, clientSecret: process.env.GOOGLE_SECRET! }),
+    // WhoopProvider(), // if you added it
   ],
-  session: {
-    strategy: "jwt",
-  },
+
   callbacks: {
-    session({ session, token }: any) {
-      if (session?.user && token?.sub) {
-        session.user.id = token.sub;
+    async session({ session, token }) {
+      // enrich session with rider fields
+      if (session.user && token?.sub) {
+        const u = await prisma.user.findUnique({ where: { id: token.sub } });
+        if (u) {
+          (session.user as any).id = u.id;
+          (session.user as any).unitSystem = (u as any).unitSystem ?? "imperial";
+          (session.user as any).ftp = (u as any).ftp ?? null;
+          (session.user as any).riderType = (u as any).riderType ?? null;
+          (session.user as any).weightLbs = (u as any).weightLbs ?? null;
+        }
       }
       return session;
     },
-    jwt({ token, user }: any) {
-      if (user) {
-        token.id = user.id;
-      }
-      return token;
-    },
   },
-  debug: true,
+
+  pages: { signIn: "/signin" },
 });
